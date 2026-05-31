@@ -1,0 +1,274 @@
+local g = getgenv()
+if g.rc_sys and type(g.rc_sys.Exit) == "function" then 
+    pcall(function() g.rc_sys:Exit() end) 
+end
+
+g.rc_sys = {}
+local env = g.rc_sys
+
+local run = game:GetService("RunService")
+local uis = game:GetService("UserInputService")
+local tweens = game:GetService("TweenService")
+local players = game:GetService("Players")
+local coregui = game:GetService("CoreGui")
+local guis = game:GetService("GuiService")
+local startergui = game:GetService("StarterGui")
+local cam = workspace.CurrentCamera
+local lp = players.LocalPlayer
+
+local target_transparency = 0.5
+local active = false
+local target = nil
+local conns = {}
+local hue = 0
+local asset_id = "rbxassetid://5466155927"
+
+local cfg = g.aim_settings or {
+    enabled = true,
+    team_check = true,
+    wall_check = true,
+    trigger_key = "MouseButton2",
+    fov_size = 180,
+    fov_visible = true,
+    lock_part = "Torso",
+    target_mode = "Mouse",
+    smooth_aim = false,
+    smooth_base = 0.1,
+    dynamic_speed = true,
+    prediction = false,
+    visible_check_type = "Raycast"
+}
+
+local function notify(t, d)
+    pcall(function()
+        startergui:SetCore("SendNotification", {
+            Title = t,
+            Text = d,
+            Duration = 5
+        })
+    end)
+end
+
+local function handle_err(err)
+    notify("System Error", "check dev console (F9) and report this issue")
+    warn("[ERROR]: " .. tostring(err))
+end
+
+local sgui = Instance.new("ScreenGui")
+sgui.Name = "ui_sys"
+sgui.DisplayOrder = 10
+
+if sethiddenproperty then
+    pcall(function() sethiddenproperty(sgui, "Parent", coregui) end)
+else
+    sgui.Parent = coregui
+end
+
+local ring = Instance.new("ImageLabel")
+ring.Size = UDim2.new(0, cfg.fov_size, 0, cfg.fov_size)
+ring.BackgroundTransparency = 1
+ring.Image = asset_id
+ring.ImageTransparency = 0.5
+ring.AnchorPoint = Vector2.new(0.5, 0.5)
+ring.Visible = cfg.fov_visible
+ring.Parent = sgui
+
+local function getcolor()
+    return Color3.fromHSV(hue, 1, 1)
+end
+
+local function waveeffect()
+    local ok, err = pcall(function()
+        local wave = Instance.new("ImageLabel")
+        wave.Size = ring.Size
+        wave.Position = ring.Position
+        wave.BackgroundTransparency = 1
+        wave.Image = asset_id
+        wave.ImageTransparency = 0.5
+        wave.AnchorPoint = Vector2.new(0.5, 0.5)
+        wave.ImageColor3 = ring.ImageColor3
+        wave.Parent = sgui
+        
+        local t_info = TweenInfo.new(0.4, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
+        local t1 = tweens:Create(wave, t_info, {
+            Size = UDim2.new(0, cfg.fov_size * 2, 0, cfg.fov_size * 2), 
+            ImageTransparency = 1
+        })
+        
+        t1:Play()
+        t1.Completed:Connect(function()
+            wave:Destroy()
+        end)
+    end)
+    if not ok then handle_err(err) end
+end
+
+local function is_1st_person()
+    return (cam.CFrame.Position - cam.Focus.Position).Magnitude < 0.6
+end
+
+local function get_part(char)
+    if cfg.lock_part == "Torso" then
+        return char:FindFirstChild("Torso") or char:FindFirstChild("UpperTorso")
+    end
+    return char:FindFirstChild(cfg.lock_part)
+end
+
+local function is_visible(char, part)
+    if not cfg.wall_check then return true end
+    if cfg.visible_check_type == "Raycast" then
+        local r_params = RaycastParams.new()
+        r_params.FilterType = Enum.RaycastFilterType.Exclude
+        r_params.FilterDescendantsInstances = {lp.Character, char}
+        local res = workspace:Raycast(cam.CFrame.Position, part.Position - cam.CFrame.Position, r_params)
+        return res == nil
+    else
+        return #(cam:GetPartsObscuringTarget({part.Position}, char:GetDescendants())) == 0
+    end
+end
+
+local function getclosest()
+    if target ~= nil then return end
+    
+    local max_d = cfg.fov_size
+    local inset = guis:GetGuiInset()
+    local mouse = uis:GetMouseLocation()
+    local m_pos = Vector2.new(mouse.X, mouse.Y - inset.Y)
+
+    for _, v in next, players:GetPlayers() do
+        if v ~= lp and v.Character then
+            local p_part = get_part(v.Character)
+            if p_part and is_visible(v.Character, p_part) then
+                if cfg.team_check and v.Team and lp.Team and v.Team == lp.Team then continue end
+                
+                local hum = v.Character:FindFirstChildOfClass("Humanoid")
+                if hum and hum.Health <= 0 then continue end
+                
+                local pos, on_s = cam:WorldToViewportPoint(p_part.Position)
+                if not on_s then continue end
+                
+                local dist
+                if cfg.target_mode == "Mouse" then
+                    dist = (m_pos - Vector2.new(pos.X, pos.Y)).Magnitude
+                else
+                    local l_root = lp.Character and lp.Character:FindFirstChild("HumanoidRootPart")
+                    local t_root = v.Character:FindFirstChild("HumanoidRootPart")
+                    if l_root and t_root then
+                        dist = (l_root.Position - t_root.Position).Magnitude
+                    else
+                        dist = math.huge
+                    end
+                end
+                
+                if dist < max_d then
+                    max_d = dist
+                    target = v
+                end
+            end
+        end
+    end
+end
+
+conns.render = run.RenderStepped:Connect(function()
+    local ok, err = pcall(function()
+        hue = (hue + 0.005) % 1
+        local current_c = getcolor()
+        
+        local inset = guis:GetGuiInset()
+        local mouse = uis:GetMouseLocation()
+        
+        ring.Position = UDim2.new(0, mouse.X, 0, mouse.Y - inset.Y)
+        ring.ImageColor3 = current_c
+        
+        if not is_1st_person() then
+            target = nil
+            if target_transparency ~= 1 then
+                target_transparency = 1
+                tweens:Create(ring, TweenInfo.new(0.25, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {ImageTransparency = 1}):Play()
+            end
+            return
+        else
+            if target_transparency ~= 0.5 then
+                target_transparency = 0.5
+                tweens:Create(ring, TweenInfo.new(0.25, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {ImageTransparency = 0.5}):Play()
+            end
+        end
+        
+        if active and cfg.enabled then
+            getclosest()
+            if target and target.Character then
+                local p_part = get_part(target.Character)
+                local hum = target.Character:FindFirstChildOfClass("Humanoid")
+                
+                if p_part and hum and hum.Health > 0 and is_visible(target.Character, p_part) then
+                    local t_pos = p_part.Position
+                    if cfg.prediction and p_part.Parent:FindFirstChild("HumanoidRootPart") then
+                        local vel = p_part.Parent.HumanoidRootPart.Velocity
+                        local p_dist = (t_pos - cam.CFrame.Position).Magnitude
+                        t_pos = t_pos + (vel * (p_dist / 300))
+                    end
+                    
+                    local target_cf = CFrame.new(cam.CFrame.Position, t_pos)
+                    
+                    if cfg.smooth_aim then
+                        local dot = cam.CFrame.LookVector:Dot((t_pos - cam.CFrame.Position).Unit)
+                        local ang = math.acos(math.clamp(dot, -1, 1))
+                        local s_spd = cfg.smooth_base
+                        
+                        if cfg.dynamic_speed then
+                            s_spd = s_spd + ((1 - math.clamp(ang, 0, 1)) * 0.2)
+                        end
+                        
+                        cam.CFrame = cam.CFrame:Lerp(target_cf, math.clamp(s_spd, 0, 1))
+                    else
+                        cam.CFrame = target_cf
+                    end
+                else
+                    target = nil
+                end
+            end
+        end
+    end)
+    if not ok then handle_err(err) end
+end)
+
+local function check_input(input)
+    local k = cfg.trigger_key
+    local is_type, is_code = false, false
+    
+    pcall(function() is_type = (input.UserInputType == Enum.UserInputType[k]) end)
+    pcall(function() is_code = (input.KeyCode == Enum.KeyCode[k]) end)
+    
+    return is_type or is_code
+end
+
+conns.input_b = uis.InputBegan:Connect(function(input, g_pe)
+    if g_pe then return end
+    local ok, err = pcall(function()
+        if check_input(input) and is_1st_person() then
+            active = true
+            waveeffect()
+        end
+    end)
+    if not ok then handle_err(err) end
+end)
+
+conns.input_e = uis.InputEnded:Connect(function(input)
+    local ok, err = pcall(function()
+        if check_input(input) then
+            active = false
+            target = nil
+        end
+    end)
+    if not ok then handle_err(err) end
+end)
+
+function env:Exit()
+    for _, v in next, conns do
+        v:Disconnect()
+    end
+    sgui:Destroy()
+    g.rc_sys = nil
+end
+
+notify("RLCAB V2.1", "script successfully loaded")

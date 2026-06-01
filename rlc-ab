@@ -1,5 +1,9 @@
 local g = getgenv()
-if g.rc_sys and type(g.rc_sys.Exit) == "function" then 
+local is_reboot = false
+local ver = "2.2"
+
+if g.rc_sys and type(g.rc_sys.Exit) == "function" then
+    is_reboot = true
     pcall(function() g.rc_sys:Exit() end) 
 end
 
@@ -271,4 +275,8 @@ function env:Exit()
     g.rc_sys = nil
 end
 
-notify("RLCAB V2.1", "script successfully loaded")
+if is_reboot then
+    notify("RLC Aimbot V"..ver, "settings successfully reloaded!")
+else
+    notify("RLC Aimbot V"..ver, "script successfully loaded")
+end

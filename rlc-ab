@@ -1,6 +1,6 @@
 local g = getgenv()
 local is_reboot = false
-local ver = "2.4"
+local ver = "2.5"
 
 if g.rc_sys and type(g.rc_sys.Exit) == "function" then
     is_reboot = true
@@ -259,7 +259,8 @@ end
 conns.input_b = uis.InputBegan:Connect(function(input, g_pe)
     if g_pe then return end
     local ok, err = pcall(function()
-        if check_input(input) and is_1st_person() then
+        local force_fov = cfg.ignore_camera_view or false
+        if check_input(input) and (is_1st_person() or force_fov) then
             active = true
             waveeffect()
         end

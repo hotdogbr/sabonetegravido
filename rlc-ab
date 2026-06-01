@@ -1,6 +1,6 @@
 local g = getgenv()
 local is_reboot = false
-local ver = "3.1"
+local ver = "3.1.1"
 
 if g.rc_sys and type(g.rc_sys.Exit) == "function" then
 	is_reboot = true
@@ -134,6 +134,7 @@ local function is_visible(char, part)
 end
 
 local function getclosest()
+    if target ~= nil then return end
 	local max_d = cfg.fov_size
 	local inset = guis:GetGuiInset()
 	local mouse = uis:GetMouseLocation()

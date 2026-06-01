@@ -1,6 +1,6 @@
 local g = getgenv()
 local is_reboot = false
-local ver = "2.2"
+local ver = "2.4"
 
 if g.rc_sys and type(g.rc_sys.Exit) == "function" then
     is_reboot = true

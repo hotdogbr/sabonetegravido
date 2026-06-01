@@ -34,6 +34,7 @@ local cfg = g.aim_settings or {
     trigger_key = "MouseButton2",
     fov_size = 180,
     fov_visible = true,
+    ignore_camera_view = false,
     lock_part = "Torso",
     target_mode = "Mouse",
     smooth_aim = false,
@@ -184,15 +185,24 @@ conns.render = run.RenderStepped:Connect(function()
         ring.Position = UDim2.new(0, mouse.X, 0, mouse.Y - inset.Y)
         ring.ImageColor3 = current_c
         
+        local force_fov = cfg.ignore_camera_view or false
+
         if not is_1st_person() then
             target = nil
-            if target_transparency ~= 1 then
-                target_transparency = 1
-                tweens:Create(ring, TweenInfo.new(0.25, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {ImageTransparency = 1}):Play()
+            if force_fov and cfg.fov_visible then
+                if target_transparency ~= 0.5 then
+                    target_transparency = 0.5
+                    tweens:Create(ring, TweenInfo.new(0.25, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {ImageTransparency = 0.5}):Play()
+                end
+            else
+                if target_transparency ~= 1 then
+                    target_transparency = 1
+                    tweens:Create(ring, TweenInfo.new(0.25, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {ImageTransparency = 1}):Play()
+                end
             end
             return
         else
-            if target_transparency ~= 0.5 then
+            if target_transparency ~= 0.5 and cfg.fov_visible then
                 target_transparency = 0.5
                 tweens:Create(ring, TweenInfo.new(0.25, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {ImageTransparency = 0.5}):Play()
             end

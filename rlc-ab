@@ -1,6 +1,6 @@
 local g = getgenv()
 local is_reboot = false
-local ver = "3.1.1"
+local ver = "3.1.2"
 
 if g.rc_sys and type(g.rc_sys.Exit) == "function" then
 	is_reboot = true
@@ -278,7 +278,6 @@ local function check_input(input)
 end
 
 conns.input_b = uis.InputBegan:Connect(function(input, g_pe)
-	if g_pe then return end
 	local ok, err = pcall(function()
 		local force_fov = cfg.ignore_camera_view or false
 		if check_input(input) and (is_1st_person() or force_fov) then

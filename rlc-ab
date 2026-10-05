@@ -1,6 +1,6 @@
 local g = getgenv()
 local is_reboot = false
-local ver = "3.1.2"
+local ver = "3.3"
 
 if g.rc_sys and type(g.rc_sys.Exit) == "function" then
 	is_reboot = true
@@ -31,6 +31,7 @@ local cfg = g.aim_settings or {
 	enabled = true,
 	team_check = true,
 	wall_check = true,
+    dead_check = true,
 	trigger_key = "MouseButton2",
 	fov_size = 180,
 	fov_visible = true,
@@ -134,8 +135,10 @@ local function is_visible(char, part)
 end
 
 local function getclosest()
-    if target ~= nil then return end
-	local max_d = cfg.fov_size
+	if target ~= nil then return end
+
+	local fov_radius = cfg.fov_size / 2
+	local best_score = math.huge
 	local inset = guis:GetGuiInset()
 	local mouse = uis:GetMouseLocation()
 	local m_pos = Vector2.new(mouse.X, mouse.Y - inset.Y)
@@ -176,22 +179,19 @@ local function getclosest()
 			local pos, on_s = cam:WorldToViewportPoint(p_part.Position)
 			if not on_s then continue end
 
-			local dist
-			if cfg.target_mode == "Mouse" then
-				dist = (m_pos - Vector2.new(pos.X, pos.Y)).Magnitude
-			else
+			local mouse_dist = (m_pos - Vector2.new(pos.X, pos.Y)).Magnitude
+
+			if mouse_dist <= fov_radius then
 				local l_root = lp.Character and lp.Character:FindFirstChild("HumanoidRootPart")
 				local t_root = char:FindFirstChild("HumanoidRootPart")
-				if l_root and t_root then
-					dist = (l_root.Position - t_root.Position).Magnitude
-				else
-					dist = math.huge
-				end
-			end
+				local char_dist = (l_root and t_root) and (l_root.Position - t_root.Position).Magnitude or 1000
 
-			if dist < max_d then
-				max_d = dist
-				best_target = t.is_player and t.player_obj or char
+				local score = (mouse_dist * 1.5) + (char_dist * 0.5)
+
+				if score < best_score then
+					best_score = score
+					best_target = t.is_player and t.player_obj or char
+				end
 			end
 		end
 	end
@@ -234,7 +234,12 @@ conns.render = run.RenderStepped:Connect(function()
 					local p_part = get_part(t_char)
 					local hum = t_char:FindFirstChildOfClass("Humanoid")
 
-					if p_part and hum and hum.Health > 0 and is_visible(t_char, p_part) then
+                    local is_alive = true
+					if cfg.dead_check then
+						is_alive = hum and hum.Health > 0 and t_char:IsDescendantOf(workspace)
+					end
+
+					if p_part and is_alive and is_visible(t_char, p_part) then
 						local t_pos = p_part.Position
 						if cfg.prediction and t_char:FindFirstChild("HumanoidRootPart") then
 							local vel = t_char.HumanoidRootPart.Velocity
